@@ -1,0 +1,8 @@
+node_modues
+vendor
+.DS_Store
+.env
+*.log
+.idea
+.vscode
+dist

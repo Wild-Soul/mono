@@ -6,3 +6,6 @@ vendor
 .idea
 .vscode
 dist
+
+# WSL ignore
+*.Zone.Identifier

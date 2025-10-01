@@ -25,8 +25,10 @@ type Enemy struct {
 }
 
 type Game struct {
-	Player  *Sprite
-	Enemies []*Enemy
+	Player      *Sprite
+	Enemies     []*Enemy
+	tilemapJSON *TilemapJSON
+	tilemapImg  *ebiten.Image
 }
 
 func (g *Game) Update() error {
@@ -66,9 +68,33 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{120, 180, 255, 255})
+	drawOptions := &ebiten.DrawImageOptions{}
+
+	// Draw background
+	for _, layer := range g.tilemapJSON.Layers {
+		for index, id := range layer.Data {
+
+			x := index % layer.Width
+			y := index / layer.Width
+			x *= 16
+			y *= 16
+
+			srcX := (id - 1) % 22
+			srcY := (id - 1) / 22
+			srcX *= 16
+			srcY *= 16
+
+			drawOptions.GeoM.Translate(float64(x), float64(y))
+
+			screen.DrawImage(
+				g.tilemapImg.SubImage(image.Rect(srcX, srcY, srcX+16, srcY+16)).(*ebiten.Image),
+				drawOptions,
+			)
+			drawOptions.GeoM.Reset()
+		}
+	}
 
 	playerImage := g.Player.Img.SubImage(image.Rect(0, 0, 16, 16))
-	drawOptions := &ebiten.DrawImageOptions{}
 	drawOptions.GeoM.Translate(g.Player.X, g.Player.Y)
 
 	screen.DrawImage(playerImage.(*ebiten.Image), drawOptions)
@@ -93,15 +119,23 @@ func main() {
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
 	playerImage, _, err := ebitenutil.NewImageFromFile("assets/images/ninja.png")
-
 	if err != nil {
-		log.Fatal("Failed to laod image:", err)
+		log.Fatal("Failed to load player image:", err)
 	}
 
 	skeletonImg, _, err := ebitenutil.NewImageFromFile("assets/images/skeleton.png")
-
 	if err != nil {
-		log.Fatal("Failed to laod image:", err)
+		log.Fatal("Failed to load skeleton image:", err)
+	}
+
+	tilemapImg, _, err := ebitenutil.NewImageFromFile("assets/images/TilesetFloor.png")
+	if err != nil {
+		log.Fatal("Failed to load floor tileset image:", err)
+	}
+
+	tilemapJson, err := NewTilemapJSON("assets/maps/tilesets/spawn.json")
+	if err != nil {
+		log.Fatal("Failed to load tilemap json:", err)
 	}
 
 	game := &Game{
@@ -136,6 +170,8 @@ func main() {
 				FollowsPlayer: false,
 			},
 		},
+		tilemapJSON: tilemapJson,
+		tilemapImg:  tilemapImg,
 	}
 
 	// Start the game loop

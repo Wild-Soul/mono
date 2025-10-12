@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	ScreenWidth  = 640
-	ScreenHeight = 480
+	ScreenWidth  = 320
+	ScreenHeight = 240
 )
 
 type Game struct {
@@ -38,9 +38,6 @@ func (g *Game) Update() error {
 	if ebiten.IsKeyPressed(ebiten.KeyS) {
 		g.Player.Y += 2
 	}
-
-	// Center camera on player
-	g.cam.CenterOn(g.Player.X+8, g.Player.Y+8, ScreenWidth, ScreenHeight)
 
 	for _, enemy := range g.Enemies {
 		if enemy.FollowsPlayer {
@@ -73,6 +70,16 @@ func (g *Game) Update() error {
 			potion.Y = -100
 		}
 	}
+
+	// Center camera on player
+	// fmt.Printf("Testing screenpos: %s, %s", float64(g.tilemapJSON.Layers[0].Width)*16.0, float64(g.tilemapJSON.Layers[0].Width)*16.0)
+	g.cam.CenterOn(g.Player.X+8, g.Player.Y+8, ScreenWidth, ScreenHeight)
+	g.cam.Constraint(
+		float64(g.tilemapJSON.Layers[0].Width)*16.0,
+		float64(g.tilemapJSON.Layers[0].Width)*16.0,
+		ScreenWidth,
+		ScreenHeight,
+	)
 
 	return nil
 }
@@ -175,8 +182,8 @@ func main() {
 		Player: &entities.Sprite{
 			Img:    playerImage,
 			Health: 100,
-			X:      100,
-			Y:      300,
+			X:      50,
+			Y:      50,
 		},
 		Enemies: []*entities.Enemy{
 			{

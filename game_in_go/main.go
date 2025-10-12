@@ -1,6 +1,7 @@
 package main
 
 import (
+	"game_in_go/entities"
 	"image"
 	"image/color"
 	"log"
@@ -9,26 +10,18 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
-type Sprite struct {
-	Img *ebiten.Image
-	X   float64
-	Y   float64
-}
-
-type Player struct {
-	*Sprite
-}
-
-type Enemy struct {
-	*Sprite
-	FollowsPlayer bool
-}
+const (
+	ScreenWidth  = 640
+	ScreenHeight = 480
+)
 
 type Game struct {
-	Player      *Sprite
-	Enemies     []*Enemy
+	Player      *entities.Sprite
+	Enemies     []*entities.Enemy
+	Potions     []*entities.Potion
 	tilemapJSON *TilemapJSON
 	tilemapImg  *ebiten.Image
+	cam         *Camera
 }
 
 func (g *Game) Update() error {
@@ -46,6 +39,9 @@ func (g *Game) Update() error {
 		g.Player.Y += 2
 	}
 
+	// Center camera on player
+	g.cam.CenterOn(g.Player.X+8, g.Player.Y+8, ScreenWidth, ScreenHeight)
+
 	for _, enemy := range g.Enemies {
 		if enemy.FollowsPlayer {
 			if g.Player.X > enemy.X {
@@ -60,6 +56,21 @@ func (g *Game) Update() error {
 				enemy.Y -= 1
 			}
 
+		}
+	}
+
+	for _, potion := range g.Potions {
+		if (g.Player.X < potion.X+16) && (g.Player.X+16 > potion.X) &&
+			(g.Player.Y < potion.Y+16) && (g.Player.Y+16 > potion.Y) {
+
+			g.Player.Health = min(100, g.Player.Health+potion.AmtHeal)
+			if g.Player.Health > 100 {
+				g.Player.Health = 100
+			}
+
+			// Remove the potion from the game by moving it off-screen. Ideally should be removed from the slice.
+			potion.X = -100
+			potion.Y = -100
 		}
 	}
 
@@ -85,11 +96,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			srcY *= 16
 
 			drawOptions.GeoM.Translate(float64(x), float64(y))
+			drawOptions.GeoM.Translate(g.cam.X, g.cam.Y)
 
 			screen.DrawImage(
 				g.tilemapImg.SubImage(image.Rect(srcX, srcY, srcX+16, srcY+16)).(*ebiten.Image),
 				drawOptions,
 			)
+
+			// Reset the transformation matrix for the next draw, otherwise the next tranlation wil be wrong.
 			drawOptions.GeoM.Reset()
 		}
 	}
@@ -104,18 +118,32 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		enemyImg := enemy.Img.SubImage(image.Rect(0, 0, 16, 16)).(*ebiten.Image)
 
 		drawOptions.GeoM.Translate(enemy.X, enemy.Y)
+		drawOptions.GeoM.Translate(g.cam.X, g.cam.Y)
+
 		screen.DrawImage(enemyImg, drawOptions)
 
 		drawOptions.GeoM.Reset()
 	}
+
+	for _, potion := range g.Potions {
+		potionImge := potion.Img.SubImage(image.Rect(0, 0, 16, 16)).(*ebiten.Image)
+
+		drawOptions.GeoM.Translate(potion.X, potion.Y)
+		drawOptions.GeoM.Translate(g.cam.X, g.cam.Y)
+
+		screen.DrawImage(potionImge, drawOptions)
+
+		drawOptions.GeoM.Reset()
+	}
+
 }
 
-func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return 640, 480
+func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
+	return ScreenWidth, ScreenHeight
 }
 
 func main() {
-	ebiten.SetWindowSize(640, 480)
+	ebiten.SetWindowSize(ScreenWidth, ScreenHeight)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
 	playerImage, _, err := ebitenutil.NewImageFromFile("assets/images/ninja.png")
@@ -126,6 +154,11 @@ func main() {
 	skeletonImg, _, err := ebitenutil.NewImageFromFile("assets/images/skeleton.png")
 	if err != nil {
 		log.Fatal("Failed to load skeleton image:", err)
+	}
+
+	potionImg, _, err := ebitenutil.NewImageFromFile("assets/images/Heart.png")
+	if err != nil {
+		log.Fatal("Failed to load potion image:", err)
 	}
 
 	tilemapImg, _, err := ebitenutil.NewImageFromFile("assets/images/TilesetFloor.png")
@@ -139,14 +172,15 @@ func main() {
 	}
 
 	game := &Game{
-		Player: &Sprite{
-			Img: playerImage,
-			X:   100,
-			Y:   300,
+		Player: &entities.Sprite{
+			Img:    playerImage,
+			Health: 100,
+			X:      100,
+			Y:      300,
 		},
-		Enemies: []*Enemy{
+		Enemies: []*entities.Enemy{
 			{
-				Sprite: &Sprite{
+				Sprite: &entities.Sprite{
 					Img: skeletonImg,
 					X:   100.4,
 					Y:   100.4,
@@ -154,7 +188,7 @@ func main() {
 				FollowsPlayer: true,
 			},
 			{
-				Sprite: &Sprite{
+				Sprite: &entities.Sprite{
 					Img: skeletonImg,
 					X:   200.4,
 					Y:   200.4,
@@ -162,7 +196,7 @@ func main() {
 				FollowsPlayer: true,
 			},
 			{
-				Sprite: &Sprite{
+				Sprite: &entities.Sprite{
 					Img: skeletonImg,
 					X:   300.4,
 					Y:   300.4,
@@ -170,8 +204,19 @@ func main() {
 				FollowsPlayer: false,
 			},
 		},
+		Potions: []*entities.Potion{
+			{
+				Sprite: &entities.Sprite{
+					Img: potionImg,
+					X:   200,
+					Y:   200,
+				},
+				AmtHeal: 20,
+			},
+		},
 		tilemapJSON: tilemapJson,
 		tilemapImg:  tilemapImg,
+		cam:         NewCamera(0, 0),
 	}
 
 	// Start the game loop
